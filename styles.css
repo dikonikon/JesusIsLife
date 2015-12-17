@@ -1,0 +1,55 @@
+.header {
+    background-color:black;
+    color:white;
+    text-align:center;
+    padding:5px;
+}
+.nav {
+    line-height:30px;
+    background-color:#eeeeee;
+    height:300px;
+    width:100px;
+    float:left;
+    padding:5px; 
+}
+.section {
+    width:350px;
+    float:left;
+    padding:10px; 
+}
+.footer {
+    background-color:black;
+    color:white;
+    clear:both;
+    text-align:center;
+    padding:5px; 
+}
+.header-text {
+    color: darkgray
+}
+.flex-container {
+    display: -webkit-flex;
+    display: flex;
+    width: 800px;
+    height: 250px;
+    background-color: lightgrey;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+.flex-item {
+    background-color: cornsilk;
+    width: 200px;
+    height: 100px;
+    margin: 10px;
+}
+
+#jesus_banner {
+    position: absolute;
+    top: 10;
+    left: 50;
+    z-index: 10;
+    font-size: 160px;
+    color: steelblue 
+}
