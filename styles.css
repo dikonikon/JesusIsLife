@@ -30,7 +30,7 @@
 .flex-container {
     display: -webkit-flex;
     display: flex;
-    width: 800px;
+    width: 1000px;
     height: 250px;
     background-color: lightgrey;
     position: absolute;
@@ -40,7 +40,7 @@
 
 .flex-item {
     background-color: cornsilk;
-    width: 200px;
+    width: 100px;
     height: 100px;
     margin: 10px;
 }
@@ -52,4 +52,12 @@
     z-index: 10;
     font-size: 160px;
     color: steelblue 
+}
+
+#peace-tile:hover {
+    transition-property: all;
+    
+    transition-duration: 3s;
+    width: 400px;
+    height: 500px        
 }
