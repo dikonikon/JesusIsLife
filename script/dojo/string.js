@@ -1,87 +1,162 @@
-var lang = require('./lang');
-function repeat(string, times) {
-    if (!string || times <= 0) {
-        return '';
-    }
-    var buffer = [];
-    while (true) {
-        if (times & 1) {
-            buffer.push(string);
-        }
-        times >>= 1;
-        if (!times) {
-            break;
-        }
-        string += string;
-    }
-    return buffer.join('');
-}
-exports.repeat = repeat;
-var Padding;
-(function (Padding) {
-    Padding[Padding["Left"] = 0] = "Left";
-    Padding[Padding["Right"] = 1] = "Right";
-    Padding[Padding["Both"] = 2] = "Both";
-})(Padding || (Padding = {}));
-;
-function _pad(text, size, character, position) {
-    if (position === void 0) { position = Padding.Right; }
-    var length = size - text.length, pad = exports.repeat(character, Math.ceil(length / character.length));
-    if (position === Padding.Left) {
-        return pad + text;
-    }
-    else if (position === Padding.Right) {
-        return text + pad;
-    }
-    else {
-        var left = Math.ceil(length / 2);
-        return pad.substr(0, left) + text + pad.substr(0, length - left);
-    }
-}
-function pad(text, size, character) {
-    if (character === void 0) { character = ' '; }
-    return _pad(text, size, character, Padding.Both);
-}
-exports.pad = pad;
-function padr(text, size, character) {
-    if (character === void 0) { character = ' '; }
-    return _pad(text, size, character, Padding.Right);
-}
-exports.padr = padr;
-function padl(text, size, character) {
-    if (character === void 0) { character = ' '; }
-    return _pad(text, size, character, Padding.Left);
-}
-exports.padl = padl;
-var substitutePattern = /\$\{([^\s\:\}]+)(?:\:([^\s\:\}]+))?\}/g;
-function defaultTransform(value) {
-    return value;
-}
-;
-function substitute(template, map, transform, context) {
-    context = context || undefined;
-    transform = transform ? transform.bind(context) : defaultTransform;
-    return template.replace(substitutePattern, function (match, key, format) {
-        var value = lang.getProperty(map, key);
-        if (format) {
-            value = lang.getProperty(context, format).call(context, value, key);
-        }
-        return transform(value, key) + '';
-    });
-}
-exports.substitute = substitute;
-function count(haystack, needle) {
-    var hits = 0, lastIndex = haystack.indexOf(needle);
-    while (lastIndex > -1) {
-        ++hits;
-        lastIndex = haystack.indexOf(needle, lastIndex + 1);
-    }
-    return hits;
-}
-exports.count = count;
-var regExpPattern = /[-\[\]{}()*+?.,\\\^$|#\s]/g;
-function escapeRegExpString(string) {
-    return string.replace(regExpPattern, '\\$&');
-}
-exports.escapeRegExpString = escapeRegExpString;
-//# sourceMappingURL=string.js.map
+define([
+	"./_base/kernel",	// kernel.global
+	"./_base/lang"
+], function(kernel, lang){
+
+// module:
+//		dojo/string
+
+var string = {
+	// summary:
+	//		String utilities for Dojo
+};
+lang.setObject("dojo.string", string);
+
+string.rep = function(/*String*/str, /*Integer*/num){
+	// summary:
+	//		Efficiently replicate a string `n` times.
+	// str:
+	//		the string to replicate
+	// num:
+	//		number of times to replicate the string
+
+	if(num <= 0 || !str){ return ""; }
+
+	var buf = [];
+	for(;;){
+		if(num & 1){
+			buf.push(str);
+		}
+		if(!(num >>= 1)){ break; }
+		str += str;
+	}
+	return buf.join("");	// String
+};
+
+string.pad = function(/*String*/text, /*Integer*/size, /*String?*/ch, /*Boolean?*/end){
+	// summary:
+	//		Pad a string to guarantee that it is at least `size` length by
+	//		filling with the character `ch` at either the start or end of the
+	//		string. Pads at the start, by default.
+	// text:
+	//		the string to pad
+	// size:
+	//		length to provide padding
+	// ch:
+	//		character to pad, defaults to '0'
+	// end:
+	//		adds padding at the end if true, otherwise pads at start
+	// example:
+	//	|	// Fill the string to length 10 with "+" characters on the right.  Yields "Dojo++++++".
+	//	|	string.pad("Dojo", 10, "+", true);
+
+	if(!ch){
+		ch = '0';
+	}
+	var out = String(text),
+		pad = string.rep(ch, Math.ceil((size - out.length) / ch.length));
+	return end ? out + pad : pad + out;	// String
+};
+
+string.substitute = function(	/*String*/		template,
+									/*Object|Array*/map,
+									/*Function?*/	transform,
+									/*Object?*/		thisObject){
+	// summary:
+	//		Performs parameterized substitutions on a string. Throws an
+	//		exception if any parameter is unmatched.
+	// template:
+	//		a string with expressions in the form `${key}` to be replaced or
+	//		`${key:format}` which specifies a format function. keys are case-sensitive.
+	// map:
+	//		hash to search for substitutions
+	// transform:
+	//		a function to process all parameters before substitution takes
+	//		place, e.g. mylib.encodeXML
+	// thisObject:
+	//		where to look for optional format function; default to the global
+	//		namespace
+	// example:
+	//		Substitutes two expressions in a string from an Array or Object
+	//	|	// returns "File 'foo.html' is not found in directory '/temp'."
+	//	|	// by providing substitution data in an Array
+	//	|	string.substitute(
+	//	|		"File '${0}' is not found in directory '${1}'.",
+	//	|		["foo.html","/temp"]
+	//	|	);
+	//	|
+	//	|	// also returns "File 'foo.html' is not found in directory '/temp'."
+	//	|	// but provides substitution data in an Object structure.  Dotted
+	//	|	// notation may be used to traverse the structure.
+	//	|	string.substitute(
+	//	|		"File '${name}' is not found in directory '${info.dir}'.",
+	//	|		{ name: "foo.html", info: { dir: "/temp" } }
+	//	|	);
+	// example:
+	//		Use a transform function to modify the values:
+	//	|	// returns "file 'foo.html' is not found in directory '/temp'."
+	//	|	string.substitute(
+	//	|		"${0} is not found in ${1}.",
+	//	|		["foo.html","/temp"],
+	//	|		function(str){
+	//	|			// try to figure out the type
+	//	|			var prefix = (str.charAt(0) == "/") ? "directory": "file";
+	//	|			return prefix + " '" + str + "'";
+	//	|		}
+	//	|	);
+	// example:
+	//		Use a formatter
+	//	|	// returns "thinger -- howdy"
+	//	|	string.substitute(
+	//	|		"${0:postfix}", ["thinger"], null, {
+	//	|			postfix: function(value, key){
+	//	|				return value + " -- howdy";
+	//	|			}
+	//	|		}
+	//	|	);
+
+	thisObject = thisObject || kernel.global;
+	transform = transform ?
+		lang.hitch(thisObject, transform) : function(v){ return v; };
+
+	return template.replace(/\$\{([^\s\:\}]+)(?:\:([^\s\:\}]+))?\}/g,
+		function(match, key, format){
+			var value = lang.getObject(key, false, map);
+			if(format){
+				value = lang.getObject(format, false, thisObject).call(thisObject, value, key);
+			}
+			return transform(value, key).toString();
+		}); // String
+};
+
+string.trim = String.prototype.trim ?
+	lang.trim : // aliasing to the native function
+	function(str){
+		str = str.replace(/^\s+/, '');
+		for(var i = str.length - 1; i >= 0; i--){
+			if(/\S/.test(str.charAt(i))){
+				str = str.substring(0, i + 1);
+				break;
+			}
+		}
+		return str;
+	};
+
+/*=====
+ string.trim = function(str){
+	 // summary:
+	 //		Trims whitespace from both sides of the string
+	 // str: String
+	 //		String to be trimmed
+	 // returns: String
+	 //		Returns the trimmed string
+	 // description:
+	 //		This version of trim() was taken from [Steven Levithan's blog](http://blog.stevenlevithan.com/archives/faster-trim-javascript).
+	 //		The short yet performant version of this function is dojo/_base/lang.trim(),
+	 //		which is part of Dojo base.  Uses String.prototype.trim instead, if available.
+	 return "";	// String
+ };
+ =====*/
+
+	return string;
+});

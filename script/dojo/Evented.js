@@ -1,34 +1,36 @@
-var on = require('./on');
-var aspect = require('./aspect');
-var Evented = (function () {
-    function Evented() {
-    }
-    Evented.prototype.on = function (type, listener) {
-        var _this = this;
-        return on.parse(this, type, listener, this, function (target, type) {
-            var name = '__on' + type;
-            if (!_this[name]) {
-                Object.defineProperty(_this, name, {
-                    configurable: true,
-                    value: undefined,
-                    writable: true
-                });
-            }
-            return aspect.on(_this, '__on' + type, listener);
-        });
-    };
-    Evented.prototype.emit = function (type) {
-        var args = [];
-        for (var _i = 1; _i < arguments.length; _i++) {
-            args[_i - 1] = arguments[_i];
-        }
-        type = '__on' + type;
-        var method = this[type];
-        if (method) {
-            return method.apply(this, args);
-        }
-    };
-    return Evented;
-})();
-module.exports = Evented;
-//# sourceMappingURL=Evented.js.map
+define(["./aspect", "./on"], function(aspect, on){
+	// module:
+	//		dojo/Evented
+
+ 	"use strict";
+ 	var after = aspect.after;
+	function Evented(){
+		// summary:
+		//		A class that can be used as a mixin or base class,
+		//		to add on() and emit() methods to a class
+		//		for listening for events and emitting events:
+		// example:
+		//		|	define(["dojo/Evented", "dojo/_base/declare", "dojo/Stateful"
+		//		|	], function(Evented, declare, Stateful){
+		//		|		var EventedStateful = declare([Evented, Stateful], {...});
+		//		|		var instance = new EventedStateful();
+		//		|		instance.on("open", function(event){
+		//		|		... do something with event
+		//		|	 });
+		//		|
+		//		|	instance.emit("open", {name:"some event", ...});
+	}
+	Evented.prototype = {
+		on: function(type, listener){
+			return on.parse(this, type, listener, function(target, type){
+				return after(target, 'on' + type, listener, true);
+			});
+		},
+		emit: function(type, event){
+			var args = [this];
+			args.push.apply(args, arguments);
+			return on.emit.apply(on, args);
+		}
+	};
+	return Evented;
+});

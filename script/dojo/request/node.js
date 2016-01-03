@@ -1,172 +1,195 @@
-var http = require('http');
-var https = require('https');
-var kernel = require('../kernel');
-var Promise = require('../Promise');
-var urlUtil = require('url');
-function normalizeHeaders(headers) {
-    var normalizedHeaders = {};
-    for (var key in headers) {
-        normalizedHeaders[key.toLowerCase()] = headers[key];
-    }
-    return normalizedHeaders;
-}
-function node(url, options) {
-    if (options === void 0) { options = {}; }
-    var deferred = new Promise.Deferred(function (reason) {
-        request && request.abort();
-        throw reason;
-    });
-    var promise = deferred.promise;
-    var parsedUrl = urlUtil.parse(options.proxy || url);
-    var requestOptions = {
-        agent: options.agent,
-        auth: parsedUrl.auth || options.auth,
-        ca: options.ca,
-        cert: options.cert,
-        ciphers: options.ciphers,
-        headers: normalizeHeaders(options.headers || {}),
-        host: parsedUrl.host,
-        hostname: parsedUrl.hostname,
-        key: options.key,
-        localAddress: options.localAddress,
-        method: options.method ? options.method.toUpperCase() : 'GET',
-        passphrase: options.passphrase,
-        path: parsedUrl.path,
-        pfx: options.pfx,
-        port: +parsedUrl.port,
-        rejectUnauthorized: options.rejectUnauthorized,
-        secureProtocol: options.secureProtocol,
-        socketPath: options.socketPath
-    };
-    if (!('user-agent' in requestOptions.headers)) {
-        requestOptions.headers['user-agent'] = 'dojo/' + kernel.version + ' Node.js/' + process.version.replace(/^v/, '');
-    }
-    if (options.proxy) {
-        requestOptions.path = url;
-        if (parsedUrl.auth) {
-            requestOptions.headers['proxy-authorization'] = 'Basic ' + new Buffer(parsedUrl.auth).toString('base64');
-        }
-        (function () {
-            var parsedUrl = urlUtil.parse(url);
-            requestOptions.headers['host'] = parsedUrl.host;
-            requestOptions.auth = parsedUrl.auth || options.auth;
-        })();
-    }
-    if (!options.auth && (options.user || options.password)) {
-        requestOptions.auth = encodeURIComponent(options.user || '') + ':' + encodeURIComponent(options.password || '');
-    }
-    var request = (parsedUrl.protocol === 'https:' ? https : http).request(requestOptions);
-    var response = {
-        data: null,
-        getHeader: function (name) {
-            return (this.nativeResponse && this.nativeResponse.headers[name.toLowerCase()]) || null;
-        },
-        requestOptions: options,
-        statusCode: null,
-        url: url
-    };
-    if (options.socketOptions) {
-        if ('timeout' in options.socketOptions) {
-            request.setTimeout(options.socketOptions.timeout);
-        }
-        if ('noDelay' in options.socketOptions) {
-            request.setNoDelay(options.socketOptions.noDelay);
-        }
-        if ('keepAlive' in options.socketOptions) {
-            var initialDelay = options.socketOptions.keepAlive;
-            request.setSocketKeepAlive(initialDelay >= 0, initialDelay || 0);
-        }
-    }
-    request.once('response', function (nativeResponse) {
-        var data;
-        var loaded = 0;
-        var total = +nativeResponse.headers['content-length'];
-        response.nativeResponse = nativeResponse;
-        response.statusCode = nativeResponse.statusCode;
-        if (response.statusCode >= 300 && response.statusCode < 400 && response.statusCode !== 304 &&
-            options.followRedirects !== false &&
-            nativeResponse.headers.location) {
-            if (nativeResponse.headers.location === url &&
-                (response.statusCode !== 303 || requestOptions.method === 'GET')) {
-                deferred.reject(new Error('Redirect loop detected for URL ' + url));
-                return;
-            }
-            deferred.progress({
-                type: 'redirect',
-                location: nativeResponse.headers.location,
-                response: nativeResponse
-            });
-            deferred.resolve(node(nativeResponse.headers.location, options));
-            return;
-        }
-        if (!options.streamData) {
-            data = [];
-        }
-        options.streamEncoding && nativeResponse.setEncoding(options.streamEncoding);
-        if (options.streamTarget) {
-            nativeResponse.pipe(options.streamTarget);
-            options.streamTarget.once('error', function (error) {
-                nativeResponse.unpipe(options.streamTarget);
-                request.abort();
-                error.response = response;
-                deferred.reject(error);
-            });
-            options.streamTarget.once('close', function () {
-                deferred.resolve(response);
-            });
-        }
-        nativeResponse.on('data', function (chunk) {
-            options.streamData || data.push(chunk);
-            loaded += typeof chunk === 'string' ? Buffer.byteLength(chunk, options.streamEncoding) : chunk.length;
-            deferred.progress({ type: 'data', chunk: chunk, loaded: loaded, total: total });
-        });
-        nativeResponse.once('end', function () {
-            timeout && timeout.remove();
-            if (!options.streamData) {
-                response.data = options.streamEncoding ? data.join('') : Buffer.concat(data, loaded);
-            }
-            if (!options.streamTarget) {
-                deferred.resolve(response);
-            }
-        });
-        deferred.progress({ type: 'nativeResponse', response: nativeResponse });
-    });
-    request.once('error', deferred.reject);
-    if (options.data) {
-        if (options.data.pipe) {
-            options.data.pipe(request);
-        }
-        else {
-            request.end(options.data, options.dataEncoding);
-        }
-    }
-    else {
-        request.end();
-    }
-    if (options.timeout > 0 && options.timeout !== Infinity) {
-        var timeout = (function () {
-            var timer = setTimeout(function () {
-                var error = new Error('Request timed out after ' + options.timeout + 'ms');
-                error.name = 'RequestTimeoutError';
-                promise.cancel(error);
-            }, options.timeout);
-            return {
-                remove: function () {
-                    this.remove = function () { };
-                    clearTimeout(timer);
-                }
-            };
-        })();
-    }
-    return promise.catch(function (error) {
-        var parsedUrl = urlUtil.parse(url);
-        if (parsedUrl.auth) {
-            parsedUrl.auth = '(redacted)';
-        }
-        var sanitizedUrl = urlUtil.format(parsedUrl);
-        error.message = '[' + requestOptions.method + ' ' + sanitizedUrl + '] ' + error.message;
-        throw error;
-    });
-}
-module.exports = node;
-//# sourceMappingURL=node.js.map
+define([
+   'require',
+   './util',
+   './handlers',
+   '../errors/RequestTimeoutError',
+   '../node!http',
+   '../node!https',
+   '../node!url',
+   '../node!stream'/*=====,
+	'../request',
+	'../_base/declare' =====*/
+], function(require, util, handlers, RequestTimeoutError, http, https, URL, stream/*=====, request, declare =====*/){
+	var Stream = stream.Stream,
+		undefined;
+
+	var defaultOptions = {
+		method: 'GET',
+		query: null,
+		data: undefined,
+		headers: {}
+	};
+	function node(url, options){
+		var response = util.parseArgs(url, util.deepCreate(defaultOptions, options), options && options.data instanceof Stream);
+		url = response.url;
+		options = response.options;
+
+		var def = util.deferred(
+			response,
+			function(dfd, response){
+				response.clientRequest.abort();
+			}
+		);
+
+		url = URL.parse(url);
+
+		var reqOptions = response.requestOptions = {
+			hostname: url.hostname,
+			port: url.port,
+			socketPath: options.socketPath,
+			method: options.method,
+			headers: options.headers,
+			agent: options.agent,
+			pfx: options.pfx,
+			key: options.key,
+			passphrase: options.passphrase,
+			cert: options.cert,
+			ca: options.ca,
+			ciphers: options.ciphers,
+			rejectUnauthorized: options.rejectUnauthorized === false ? false : true
+		};
+		if(url.path){
+			reqOptions.path = url.path;
+		}
+		if(options.user || options.password){
+			reqOptions.auth = (options.user||'') + ':' + (options.password||'');
+		}
+		var req = response.clientRequest = (url.protocol === 'https:' ? https : http).request(reqOptions);
+
+		if(options.socketOptions){
+			if('timeout' in options.socketOptions){
+				req.setTimeout(options.socketOptions.timeout);
+			}
+			if('noDelay' in options.socketOptions){
+				req.setNoDelay(options.socketOptions.noDelay);
+			}
+			if('keepAlive' in options.socketOptions){
+				var initialDelay = options.socketOptions.keepAlive;
+				req.setKeepAlive(initialDelay >= 0, initialDelay || 0);
+			}
+		}
+
+		req.on('socket', function(){
+			response.hasSocket = true;
+			def.progress(response);
+		});
+
+		req.on('response', function(clientResponse){
+			response.clientResponse = clientResponse;
+			response.status = clientResponse.statusCode;
+			response.getHeader = function(headerName){
+				return clientResponse.headers[headerName.toLowerCase()] || null;
+			};
+
+			var body = [];
+			clientResponse.on('data', function(chunk){
+				body.push(chunk);
+
+				// TODO: progress updates via the deferred
+			});
+			clientResponse.on('end', function(){
+				if(timeout){
+					clearTimeout(timeout);
+				}
+				response.text = body.join('');
+				try{
+					handlers(response);
+					def.resolve(response);
+				}catch(error){
+					def.reject(error);
+				}
+			});
+		});
+
+		req.on('error', def.reject);
+
+		if(options.data){
+			if(typeof options.data === 'string'){
+				req.end(options.data);
+			}else{
+				options.data.pipe(req);
+			}
+		}else{
+			req.end();
+		}
+
+		if(options.timeout){
+			var timeout = setTimeout(function(){
+				def.cancel(new RequestTimeoutError(response));
+			}, options.timeout);
+		}
+
+		return def.promise;
+	}
+
+	/*=====
+	node = function(url, options){
+		// summary:
+		//		Sends a request using the included http or https interface from node.js
+		//		with the given URL and options.
+		// url: String
+		//		URL to request
+		// options: dojo/request/node.__Options?
+		//		Options for the request.
+		// returns: dojo/request.__Promise
+	};
+	node.__BaseOptions = declare(request.__BaseOptions, {
+		// data: String|Object|Stream?
+		//		Data to transfer. This is ignored for GET and DELETE
+		//		requests.
+		// headers: Object?
+		//		Headers to use for the request.
+		// user: String?
+		//		Username to use during the request.
+		// password: String?
+		//		Password to use during the request.
+	});
+	node.__MethodOptions = declare(null, {
+		// method: String?
+		//		The HTTP method to use to make the request. Must be
+		//		uppercase. Default is `"GET"`.
+	});
+	node.__Options = declare([node.__BaseOptions, node.__MethodOptions]);
+
+	node.get = function(url, options){
+		// summary:
+		//		Send an HTTP GET request using XMLHttpRequest with the given URL and options.
+		// url: String
+		//		URL to request
+		// options: dojo/request/node.__BaseOptions?
+		//		Options for the request.
+		// returns: dojo/request.__Promise
+	};
+	node.post = function(url, options){
+		// summary:
+		//		Send an HTTP POST request using XMLHttpRequest with the given URL and options.
+		// url: String
+		//		URL to request
+		// options: dojo/request/node.__BaseOptions?
+		//		Options for the request.
+		// returns: dojo/request.__Promise
+	};
+	node.put = function(url, options){
+		// summary:
+		//		Send an HTTP PUT request using XMLHttpRequest with the given URL and options.
+		// url: String
+		//		URL to request
+		// options: dojo/request/node.__BaseOptions?
+		//		Options for the request.
+		// returns: dojo/request.__Promise
+	};
+	node.del = function(url, options){
+		// summary:
+		//		Send an HTTP DELETE request using XMLHttpRequest with the given URL and options.
+		// url: String
+		//		URL to request
+		// options: dojo/request/node.__BaseOptions?
+		//		Options for the request.
+		// returns: dojo/request.__Promise
+	};
+	=====*/
+
+	util.addCommonMethods(node);
+
+	return node;
+});
