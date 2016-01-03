@@ -1,0 +1,6 @@
+*.js
+script/dijit/
+script/dojo/
+script/dojox/
+script/util/
+*.map
