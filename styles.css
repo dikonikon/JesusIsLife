@@ -28,7 +28,6 @@
     color: darkgray
 }
 .flex-container {
-    display: -webkit-flex;
     display: flex;
     width: 1000px;
     height: 250px;
@@ -43,6 +42,20 @@
     width: 100px;
     height: 100px;
     margin: 10px;
+    z-index: 5
+}
+
+#txt_peace-tile {
+    display: block;
+    width: 400px;
+    height: 600px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    margin: 10px;
+    opacity: 0;
+    z-index: -1;
+    background-color: cornsilk
 }
 
 #jesus_banner {
